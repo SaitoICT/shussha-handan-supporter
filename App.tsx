@@ -23,7 +23,11 @@ import {
   History as HistoryIcon,
   TrendingUp,
   User,
-  Trash2
+  Trash2,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  LineChart
 } from 'lucide-react';
 import { Symptoms, WorkContext, Assessment, DecisionResult, SymptomSeverity, HistoryEntry, Gender } from './types';
 import { getAIAssessment } from './services/geminiService';
@@ -82,7 +86,7 @@ const SYMPTOM_GUIDE: Record<string, Record<SymptomSeverity, string>> = {
 
 const SimpleLineChart: React.FC<{ data: HistoryEntry[] }> = ({ data }) => {
   const chartData = useMemo(() => {
-    return data.slice(-7).map(d => d.assessment.score);
+    return data.slice(-7).map(d => d.assessment.score).reverse();
   }, [data]);
 
   if (chartData.length < 2) return <p className="text-center text-gray-400 text-xs py-4">データが不足しています（2件以上必要です）</p>;
@@ -99,12 +103,10 @@ const SimpleLineChart: React.FC<{ data: HistoryEntry[] }> = ({ data }) => {
   return (
     <div className="flex flex-col items-center">
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
-        {/* Horizontal Lines */}
         {[0, 25, 50, 75, 100].map(val => {
           const y = height - ((val / 100) * (height - padding * 2) + padding);
           return <line key={val} x1="0" y1={y} x2={width} y2={y} stroke="#e2e8f0" strokeDasharray="4 2" />;
         })}
-        {/* Path */}
         <polyline
           fill="none"
           stroke="#4f46e5"
@@ -113,7 +115,6 @@ const SimpleLineChart: React.FC<{ data: HistoryEntry[] }> = ({ data }) => {
           strokeLinejoin="round"
           points={points}
         />
-        {/* Dots */}
         {chartData.map((score, i) => {
           const x = (i / (chartData.length - 1)) * (width - padding * 2) + padding;
           const y = height - ((score / 100) * (height - padding * 2) + padding);
@@ -121,14 +122,15 @@ const SimpleLineChart: React.FC<{ data: HistoryEntry[] }> = ({ data }) => {
         })}
       </svg>
       <div className="w-full flex justify-between px-2 mt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-        <span>Oldest</span>
-        <span>Latest (Trend)</span>
+        <span>過去</span>
+        <span>最新</span>
       </div>
     </div>
   );
 };
 
 const App: React.FC = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [step, setStep] = useState(1); // 1: Symptoms, 2: Context, 3: Result, 4: History
   const [loading, setLoading] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
@@ -155,7 +157,6 @@ const App: React.FC = () => {
     isPeakPeriod: false,
   });
 
-  // Load History
   useEffect(() => {
     const saved = localStorage.getItem('attendance_history');
     if (saved) {
@@ -165,7 +166,27 @@ const App: React.FC = () => {
         console.error("Failed to load history");
       }
     }
+    const session = localStorage.getItem('attendance_session');
+    if (session) setIsLoggedIn(true);
   }, []);
+
+  // Fix: Added missing toggleHelp function
+  const toggleHelp = (key: string) => {
+    setActiveHelp(activeHelp === key ? null : key);
+  };
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+    localStorage.setItem('attendance_session', 'active');
+  };
+
+  const handleLogout = () => {
+    if (confirm("ログアウトしますか？（記録はデバイスに残ります）")) {
+      setIsLoggedIn(false);
+      localStorage.removeItem('attendance_session');
+      setStep(1);
+    }
+  };
 
   const handleAssessment = async () => {
     setLoading(true);
@@ -173,7 +194,6 @@ const App: React.FC = () => {
       const result = await getAIAssessment(symptoms, workContext);
       setAssessment(result);
       
-      // Save to History
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
         date: new Date().toLocaleString('ja-JP'),
@@ -239,27 +259,91 @@ const App: React.FC = () => {
     }
   };
 
-  const toggleHelp = (key: string) => {
-    setActiveHelp(activeHelp === key ? null : key);
-  };
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-sky-50 flex flex-col items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white p-8 rounded-[2.5rem] shadow-2xl border border-white/50 space-y-8 animate-fadeIn text-center">
+          <div className="flex justify-center">
+            <div className="bg-indigo-600 p-5 rounded-3xl text-white shadow-xl rotate-3">
+              <ShieldCheck size={48} />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h1 className="text-3xl font-black text-gray-800 tracking-tight">
+              出社判断<span className="text-indigo-600">サポーター</span>
+            </h1>
+            <p className="text-gray-500 text-sm font-medium">
+              あなたの健康を守り、スムーズな業務調整を。
+            </p>
+          </div>
+
+          <div className="space-y-4 text-left bg-gray-50 p-6 rounded-2xl border border-gray-100">
+            <div className="flex items-start gap-3">
+              <div className="bg-white p-2 rounded-lg text-indigo-500 shadow-sm"><Brain size={18} /></div>
+              <div>
+                <p className="text-sm font-bold text-gray-700">AIによる精密な不調判定</p>
+                <p className="text-xs text-gray-500 leading-relaxed">フィジカル・メンタルの両面から分析します。</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-white p-2 rounded-lg text-emerald-500 shadow-sm"><LineChart size={18} /></div>
+              <div>
+                <p className="text-sm font-bold text-gray-700">体調ログとトレンド分析</p>
+                <p className="text-xs text-gray-500 leading-relaxed">ログインすると、過去の不調スコアがグラフ化され、変化に早く気づけます。</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-white p-2 rounded-lg text-amber-500 shadow-sm"><MessageSquare size={18} /></div>
+              <div>
+                <p className="text-sm font-bold text-gray-700">プロフェッショナルな報告文案</p>
+                <p className="text-xs text-gray-500 leading-relaxed">上長への連絡を丁寧な敬語で自動作成。コピーして送るだけ。</p>
+              </div>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleLogin}
+            className="w-full py-5 px-8 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-lg shadow-indigo-200 transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg"
+          >
+            診断をはじめる <ChevronRight size={24} />
+          </button>
+          
+          <p className="text-[10px] text-gray-400">
+            ログインすることで体調履歴がデバイスに安全に記録されます。<br/>
+            医学的診断を行うものではありません。
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-20">
-      {/* Header */}
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setStep(1)}>
             <div className="bg-indigo-600 p-2 rounded-lg text-white">
               <AlertCircle size={24} />
             </div>
-            <h1 className="text-xl font-bold text-gray-800">出社判断サポーター</h1>
+            <h1 className="text-xl font-bold text-gray-800 hidden sm:block">出社判断サポーター</h1>
           </div>
-          <button 
-            onClick={() => setStep(step === 4 ? 1 : 4)}
-            className={`p-2 rounded-lg transition-colors ${step === 4 ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}
-          >
-            <HistoryIcon size={24} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setStep(step === 4 ? 1 : 4)}
+              className={`p-2 rounded-lg transition-colors ${step === 4 ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}
+              title="履歴"
+            >
+              <HistoryIcon size={24} />
+            </button>
+            <button 
+              onClick={handleLogout}
+              className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+              title="ログアウト"
+            >
+              <LogOut size={24} />
+            </button>
+          </div>
         </div>
         <div className="w-full bg-gray-100 h-1">
           <div 
@@ -271,7 +355,6 @@ const App: React.FC = () => {
 
       <main className="max-w-2xl mx-auto px-4 pt-8">
         {step === 4 ? (
-          /* History View */
           <section className="space-y-6 animate-fadeIn">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -339,7 +422,6 @@ const App: React.FC = () => {
               </p>
             </div>
 
-            {/* Basic Info */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
               <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 border-b pb-2 mb-6">
                 <User className="text-indigo-500" size={20} /> 基本情報
@@ -362,29 +444,21 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Physical Symptoms */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-8">
               <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 border-b pb-2">
                 <Thermometer className="text-orange-500" size={20} /> 身体的症状
               </h2>
               
               <div>
-                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
-                  体温
-                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">体温</label>
                 <div className="flex items-center gap-4">
                   <input 
-                    type="range" 
-                    min="35" 
-                    max="40" 
-                    step="0.1" 
+                    type="range" min="35" max="40" step="0.1" 
                     value={symptoms.fever}
                     onChange={(e) => setSymptoms({ ...symptoms, fever: parseFloat(e.target.value) })}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                   />
-                  <span className="text-xl font-bold text-indigo-600 w-16 text-right">
-                    {symptoms.fever.toFixed(1)}°
-                  </span>
+                  <span className="text-xl font-bold text-indigo-600 w-16 text-right">{symptoms.fever.toFixed(1)}°</span>
                 </div>
               </div>
 
@@ -396,12 +470,9 @@ const App: React.FC = () => {
               ].map(({ key, label, icon }) => (
                 <div key={key} className="relative">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                      {icon} {label}
-                    </label>
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">{icon} {label}</label>
                     <button onClick={() => toggleHelp(key)} className="text-gray-400 hover:text-indigo-600"><HelpCircle size={18} /></button>
                   </div>
-
                   {activeHelp === key && (
                     <div className="absolute z-20 left-0 right-0 top-8 bg-white border border-indigo-100 shadow-xl rounded-xl p-4 animate-fadeIn">
                       <div className="flex justify-between items-center mb-2">
@@ -415,7 +486,6 @@ const App: React.FC = () => {
                       </div>
                     </div>
                   )}
-
                   <div className="grid grid-cols-4 gap-2">
                     {SEVERITY_OPTIONS.map((opt) => (
                       <button
@@ -434,12 +504,10 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Mental Health Section */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-8">
               <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 border-b pb-2">
                 <Heart className="text-rose-500" size={20} /> メンタル・心理状態
               </h2>
-              
               {[
                 { key: 'mentalStress', label: 'ストレス・重圧', icon: <Brain size={16} /> },
                 { key: 'moodDepression', label: '気分の落ち込み', icon: <CloudLightning size={16} /> },
@@ -447,12 +515,9 @@ const App: React.FC = () => {
               ].map(({ key, label, icon }) => (
                 <div key={key} className="relative">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                      {icon} {label}
-                    </label>
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">{icon} {label}</label>
                     <button onClick={() => toggleHelp(key)} className="text-gray-400 hover:text-rose-600"><HelpCircle size={18} /></button>
                   </div>
-
                   {activeHelp === key && (
                     <div className="absolute z-20 left-0 right-0 top-8 bg-white border border-rose-100 shadow-xl rounded-xl p-4 animate-fadeIn">
                       <div className="flex justify-between items-center mb-2">
@@ -466,7 +531,6 @@ const App: React.FC = () => {
                       </div>
                     </div>
                   )}
-
                   <div className="grid grid-cols-4 gap-2">
                     {SEVERITY_OPTIONS.map((opt) => (
                       <button
@@ -483,7 +547,6 @@ const App: React.FC = () => {
                   <p className="mt-1 text-[10px] text-gray-400 italic">{SYMPTOM_GUIDE[key][symptoms[key as keyof Symptoms] as SymptomSeverity]}</p>
                 </div>
               ))}
-
               <div>
                 <label className="text-sm font-bold text-gray-700 mb-2 block">その他（特記事項）</label>
                 <textarea
@@ -542,7 +605,7 @@ const App: React.FC = () => {
                 <Brain size={18} />
                 <span>AIアドバイス</span>
               </div>
-              <div className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap italic">
+              <div className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap italic italic">
                 "{assessment.aiAdvice}"
               </div>
             </div>
@@ -580,7 +643,6 @@ const App: React.FC = () => {
         ) : null}
       </main>
 
-      {/* Footer Navigation */}
       <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white bg-opacity-80 backdrop-blur-md border-t flex justify-center z-10">
         <div className="max-w-2xl w-full flex gap-3">
           {step === 4 ? (
@@ -600,7 +662,6 @@ const App: React.FC = () => {
                   <ChevronLeft size={20} /> 戻る
                 </button>
               )}
-              
               {step === 1 && (
                  <button
                   onClick={() => setStep(2)}
@@ -609,7 +670,6 @@ const App: React.FC = () => {
                   次へ <ChevronRight size={20} />
                 </button>
               )}
-
               {step === 2 && (
                  <button
                   onClick={handleAssessment}
@@ -628,7 +688,6 @@ const App: React.FC = () => {
                   )}
                 </button>
               )}
-
               {step === 3 && (
                 <button
                   onClick={() => setStep(4)}
