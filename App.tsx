@@ -16,7 +16,10 @@ import {
   Check,
   Send,
   HelpCircle,
-  X
+  X,
+  Heart,
+  Moon,
+  ZapOff
 } from 'lucide-react';
 import { Symptoms, WorkContext, Assessment, DecisionResult, SymptomSeverity } from './types';
 import { getAIAssessment } from './services/geminiService';
@@ -52,6 +55,24 @@ const SYMPTOM_GUIDE: Record<string, Record<SymptomSeverity, string>> = {
     mild: '喉に少し違和感やイガイガ感がありますが、食事は普通に取れます。',
     moderate: '飲み込む時に痛みがあり、固形物の食事が少し辛い状態です。',
     severe: '唾を飲み込むのも激痛が走り、声が出しにくい状態です。'
+  },
+  mentalStress: {
+    none: '特に感じていません。',
+    mild: '少しプレッシャーを感じますが、コントロール可能です。',
+    moderate: '常に緊張感や不安があり、リラックスするのが難しいです。',
+    severe: '極度の重圧を感じ、パニックや強い拒絶感があります。'
+  },
+  moodDepression: {
+    none: '安定しています。',
+    mild: '少し気分が沈むことがありますが、切り替え可能です。',
+    moderate: '何に対しても意欲が湧かず、理由なく涙が出たり塞ぎ込んだりします。',
+    severe: '絶望感や強い無気力感があり、全く動くことができません。'
+  },
+  sleepQuality: {
+    none: 'よく眠れています。',
+    mild: '寝つきが少し悪かったり、夜中に一度目が覚める程度です。',
+    moderate: '何度も目が覚める、または短時間しか眠れず日中も眠気が強いです。',
+    severe: 'ほとんど眠れない、または悪夢で何度も起き、著しく消耗しています。'
   }
 };
 
@@ -68,6 +89,9 @@ const App: React.FC = () => {
     fatigue: 'none',
     headache: 'none',
     soreThroat: 'none',
+    mentalStress: 'none',
+    moodDepression: 'none',
+    sleepQuality: 'none',
     otherSymptoms: '',
   });
 
@@ -160,14 +184,19 @@ const App: React.FC = () => {
             <div className="bg-blue-50 p-4 rounded-xl flex gap-3 border border-blue-100">
               <Info className="text-blue-500 shrink-0" />
               <p className="text-sm text-blue-700 leading-relaxed">
-                現在の症状を正直に入力してください。このツールは医療診断に代わるものではありません。
+                現在の症状を正直に入力してください。心と体の両面からチェックします。
               </p>
             </div>
 
+            {/* Physical Symptoms */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-8">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 border-b pb-2">
+                <Thermometer className="text-orange-500" size={20} /> 身体的症状
+              </h2>
+              
               <div>
                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
-                  <Thermometer className="w-4 h-4" /> 体温
+                  体温
                 </label>
                 <div className="flex items-center gap-4">
                   <input 
@@ -187,7 +216,7 @@ const App: React.FC = () => {
 
               {[
                 { key: 'cough', label: '咳・呼吸器症状', icon: <CloudLightning size={16} /> },
-                { key: 'fatigue', label: '全身の倦怠感', icon: <Brain size={16} /> },
+                { key: 'fatigue', label: '全身の倦怠感', icon: <ZapOff size={16} /> },
                 { key: 'headache', label: '頭痛', icon: <MessageSquare size={16} /> },
                 { key: 'soreThroat', label: '喉の痛み', icon: <Info size={16} /> }
               ].map(({ key, label, icon }) => (
@@ -196,30 +225,18 @@ const App: React.FC = () => {
                     <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
                       {icon} {label}
                     </label>
-                    <button 
-                      onClick={() => toggleHelp(key)}
-                      className="text-gray-400 hover:text-indigo-600 transition-colors"
-                      title="判定基準を見る"
-                    >
-                      <HelpCircle size={18} />
-                    </button>
+                    <button onClick={() => toggleHelp(key)} className="text-gray-400 hover:text-indigo-600"><HelpCircle size={18} /></button>
                   </div>
 
-                  {/* Help Card */}
                   {activeHelp === key && (
-                    <div className="absolute z-20 left-0 right-0 top-8 bg-white border border-indigo-100 shadow-xl rounded-xl p-4 animate-fadeIn scale-in-center">
-                      <div className="flex justify-between items-center mb-3">
+                    <div className="absolute z-20 left-0 right-0 top-8 bg-white border border-indigo-100 shadow-xl rounded-xl p-4 animate-fadeIn">
+                      <div className="flex justify-between items-center mb-2">
                         <span className="text-xs font-bold text-indigo-600">{label}の目安</span>
-                        <button onClick={() => setActiveHelp(null)} className="text-gray-400 hover:text-red-500">
-                          <X size={16} />
-                        </button>
+                        <X size={16} onClick={() => setActiveHelp(null)} className="cursor-pointer text-gray-400" />
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         {SEVERITY_OPTIONS.map((opt) => (
-                          <div key={opt.value} className="text-[11px] leading-relaxed">
-                            <span className="font-bold text-gray-600 mr-2">【{opt.label}】</span>
-                            <span className="text-gray-500">{SYMPTOM_GUIDE[key][opt.value]}</span>
-                          </div>
+                          <div key={opt.value} className="text-[10px]"><span className="font-bold">【{opt.label}】</span> {SYMPTOM_GUIDE[key][opt.value]}</div>
                         ))}
                       </div>
                     </div>
@@ -231,29 +248,72 @@ const App: React.FC = () => {
                         key={opt.value}
                         onClick={() => setSymptoms({ ...symptoms, [key as keyof Symptoms]: opt.value })}
                         className={`py-2 px-1 text-xs rounded-lg border transition-all ${
-                          symptoms[key as keyof Symptoms] === opt.value
-                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
-                            : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'
+                          symptoms[key as keyof Symptoms] === opt.value ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-500'
                         }`}
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  
-                  {/* Active Description */}
-                  <div className="mt-2 min-h-[1.5rem]">
-                    <p className="text-[11px] text-gray-400 italic leading-snug">
-                      {SYMPTOM_GUIDE[key][symptoms[key as keyof Symptoms] as SymptomSeverity]}
-                    </p>
+                  <p className="mt-1 text-[10px] text-gray-400 italic">{SYMPTOM_GUIDE[key][symptoms[key as keyof Symptoms] as SymptomSeverity]}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Mental Health Section */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-8">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 border-b pb-2">
+                <Heart className="text-rose-500" size={20} /> メンタル・心理状態
+              </h2>
+              
+              {[
+                { key: 'mentalStress', label: 'ストレス・重圧', icon: <Brain size={16} /> },
+                { key: 'moodDepression', label: '気分の落ち込み', icon: <CloudLightning size={16} /> },
+                { key: 'sleepQuality', label: '睡眠の質', icon: <Moon size={16} /> }
+              ].map(({ key, label, icon }) => (
+                <div key={key} className="relative">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                      {icon} {label}
+                    </label>
+                    <button onClick={() => toggleHelp(key)} className="text-gray-400 hover:text-rose-600"><HelpCircle size={18} /></button>
                   </div>
+
+                  {activeHelp === key && (
+                    <div className="absolute z-20 left-0 right-0 top-8 bg-white border border-rose-100 shadow-xl rounded-xl p-4 animate-fadeIn">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-rose-600">{label}の目安</span>
+                        <X size={16} onClick={() => setActiveHelp(null)} className="cursor-pointer text-gray-400" />
+                      </div>
+                      <div className="space-y-1">
+                        {SEVERITY_OPTIONS.map((opt) => (
+                          <div key={opt.value} className="text-[10px]"><span className="font-bold">【{opt.label}】</span> {SYMPTOM_GUIDE[key][opt.value]}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-4 gap-2">
+                    {SEVERITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setSymptoms({ ...symptoms, [key as keyof Symptoms]: opt.value })}
+                        className={`py-2 px-1 text-xs rounded-lg border transition-all ${
+                          symptoms[key as keyof Symptoms] === opt.value ? 'bg-rose-500 border-rose-500 text-white' : 'bg-white border-gray-200 text-gray-500'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-400 italic">{SYMPTOM_GUIDE[key][symptoms[key as keyof Symptoms] as SymptomSeverity]}</p>
                 </div>
               ))}
 
               <div>
-                <label className="text-sm font-bold text-gray-700 mb-2 block">その他気になる症状</label>
+                <label className="text-sm font-bold text-gray-700 mb-2 block">その他（特記事項）</label>
                 <textarea
-                  placeholder="鼻水、腹痛、発疹など..."
+                  placeholder="具体的なエピソードや身体症状の続きなど..."
                   className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[80px]"
                   value={symptoms.otherSymptoms}
                   onChange={(e) => setSymptoms({ ...symptoms, otherSymptoms: e.target.value })}
@@ -283,9 +343,13 @@ const App: React.FC = () => {
                 </label>
               ))}
             </div>
-
-            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-xs text-amber-800 leading-relaxed">
-              ※ 出社により感染を広げるリスクがある場合、会社やチームへの負の影響は大きくなります。「代わりがきかない」場合でも、まずは上司に相談することをお勧めします。
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-xs text-amber-800 space-y-2">
+              <p>※ 心身の健康は仕事よりも優先されるべきです。特にメンタル不調は「気のせい」と放置せず、早めの対処が重要です。</p>
+              <p>※ 出社により感染を広げるリスクがある場合、会社やチームへの負の影響は大きくなります。重要な業務がある場合でも、まずは健康を第一に考えてください。</p>
+              <div className="border-t border-amber-200 pt-2">
+                <p className="font-bold mb-1">【免責事項】</p>
+                <p className="leading-relaxed">本判定は医学的根拠に基づくものではなく、あくまで一般的なガイドラインとAIの推論による補助ツールです。最終的な判断は自身の責任において行うか、必要に応じて医療機関へ相談してください。</p>
+              </div>
             </div>
           </section>
         )}
@@ -298,7 +362,7 @@ const App: React.FC = () => {
               </div>
               <h2 className="text-2xl font-black mb-2">{getResultTitle(assessment.decision)}</h2>
               <div className="inline-block px-3 py-1 bg-white bg-opacity-50 rounded-full text-xs font-bold mb-4">
-                症状スコア: {assessment.score} / 100
+                不調スコア: {assessment.score} / 100
               </div>
               <p className="text-sm font-medium leading-relaxed opacity-90">{assessment.reason}</p>
             </div>
@@ -335,16 +399,12 @@ const App: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-               <button 
-                onClick={() => setStep(1)}
-                className="w-full py-4 text-gray-500 font-bold hover:bg-gray-100 rounded-2xl transition-colors"
-               >
+               <button onClick={() => setStep(1)} className="w-full py-4 text-gray-500 font-bold hover:bg-gray-100 rounded-2xl transition-colors">
                  最初からやり直す
                </button>
             </div>
-            
             <p className="text-[10px] text-gray-400 text-center">
-              免責事項: この判定は医学的根拠に基づくものではなく、あくまで一般的なガイドラインとAIの推論による補助ツールです。最終的な判断は自身の責任または医師の指示に従ってください。
+              免責事項: このツールは補助的なものであり、医学的・心理学的診断ではありません。
             </p>
           </section>
         )}
@@ -356,20 +416,18 @@ const App: React.FC = () => {
           {step > 1 && step < 3 && (
             <button
               onClick={() => setStep(step - 1)}
-              className="flex-1 py-4 px-6 bg-gray-100 text-gray-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-200 transition-all"
+              className="flex-1 py-4 px-6 bg-gray-100 text-gray-600 font-bold rounded-2xl flex items-center justify-center gap-2"
             >
-              <ChevronLeft size={20} />
-              戻る
+              <ChevronLeft size={20} /> 戻る
             </button>
           )}
           
           {step === 1 && (
              <button
               onClick={() => setStep(2)}
-              className="flex-1 py-4 px-6 bg-indigo-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+              className="flex-1 py-4 px-6 bg-indigo-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg"
             >
-              次へ
-              <ChevronRight size={20} />
+              次へ <ChevronRight size={20} />
             </button>
           )}
 
@@ -377,22 +435,17 @@ const App: React.FC = () => {
              <button
               onClick={handleAssessment}
               disabled={loading}
-              className={`flex-1 py-4 px-6 font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all ${
-                loading 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                : 'bg-indigo-600 text-white shadow-indigo-100 hover:bg-indigo-700'
+              className={`flex-1 py-4 px-6 font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg ${
+                loading ? 'bg-gray-300' : 'bg-indigo-600 text-white hover:bg-indigo-700'
               }`}
             >
               {loading ? (
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>AIが判定中...</span>
+                  <span>AIが分析中...</span>
                 </div>
               ) : (
-                <>
-                  判定する
-                  <ChevronRight size={20} />
-                </>
+                <>判定する <ChevronRight size={20} /></>
               )}
             </button>
           )}

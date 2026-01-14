@@ -7,6 +7,10 @@ export interface Symptoms {
   fatigue: SymptomSeverity;
   headache: SymptomSeverity;
   soreThroat: SymptomSeverity;
+  // Mental health fields
+  mentalStress: SymptomSeverity;
+  moodDepression: SymptomSeverity;
+  sleepQuality: SymptomSeverity;
   otherSymptoms: string;
 }
 
