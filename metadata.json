@@ -1,0 +1,5 @@
+{
+  "name": "出社判断サポーター (Attendance Decision Helper)",
+  "description": "体調不良時の出社可否を客観的な指標とAIアドバイスでサポートするアプリケーションです。症状の入力に基づいて、リモートワーク、欠勤、出社の判断を提案します。",
+  "requestFramePermissions": []
+}
