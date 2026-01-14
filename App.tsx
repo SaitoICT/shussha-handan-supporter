@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AlertCircle, 
   Home, 
@@ -19,9 +19,13 @@ import {
   X,
   Heart,
   Moon,
-  ZapOff
+  ZapOff,
+  History as HistoryIcon,
+  TrendingUp,
+  User,
+  Trash2
 } from 'lucide-react';
-import { Symptoms, WorkContext, Assessment, DecisionResult, SymptomSeverity } from './types';
+import { Symptoms, WorkContext, Assessment, DecisionResult, SymptomSeverity, HistoryEntry, Gender } from './types';
 import { getAIAssessment } from './services/geminiService';
 
 const SEVERITY_OPTIONS: { label: string; value: SymptomSeverity }[] = [
@@ -76,14 +80,64 @@ const SYMPTOM_GUIDE: Record<string, Record<SymptomSeverity, string>> = {
   }
 };
 
+const SimpleLineChart: React.FC<{ data: HistoryEntry[] }> = ({ data }) => {
+  const chartData = useMemo(() => {
+    return data.slice(-7).map(d => d.assessment.score);
+  }, [data]);
+
+  if (chartData.length < 2) return <p className="text-center text-gray-400 text-xs py-4">データが不足しています（2件以上必要です）</p>;
+
+  const width = 300;
+  const height = 100;
+  const padding = 10;
+  const points = chartData.map((score, i) => {
+    const x = (i / (chartData.length - 1)) * (width - padding * 2) + padding;
+    const y = height - ((score / 100) * (height - padding * 2) + padding);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+        {/* Horizontal Lines */}
+        {[0, 25, 50, 75, 100].map(val => {
+          const y = height - ((val / 100) * (height - padding * 2) + padding);
+          return <line key={val} x1="0" y1={y} x2={width} y2={y} stroke="#e2e8f0" strokeDasharray="4 2" />;
+        })}
+        {/* Path */}
+        <polyline
+          fill="none"
+          stroke="#4f46e5"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+        {/* Dots */}
+        {chartData.map((score, i) => {
+          const x = (i / (chartData.length - 1)) * (width - padding * 2) + padding;
+          const y = height - ((score / 100) * (height - padding * 2) + padding);
+          return <circle key={i} cx={x} cy={y} r="4" fill="#4f46e5" />;
+        })}
+      </svg>
+      <div className="w-full flex justify-between px-2 mt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+        <span>Oldest</span>
+        <span>Latest (Trend)</span>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1); // 1: Symptoms, 2: Context, 3: Result, 4: History
   const [loading, setLoading] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeHelp, setActiveHelp] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   const [symptoms, setSymptoms] = useState<Symptoms>({
+    gender: 'unspecified',
     fever: 36.5,
     cough: 'none',
     fatigue: 'none',
@@ -101,17 +155,48 @@ const App: React.FC = () => {
     isPeakPeriod: false,
   });
 
+  // Load History
+  useEffect(() => {
+    const saved = localStorage.getItem('attendance_history');
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load history");
+      }
+    }
+  }, []);
+
   const handleAssessment = async () => {
     setLoading(true);
     try {
       const result = await getAIAssessment(symptoms, workContext);
       setAssessment(result);
+      
+      // Save to History
+      const newEntry: HistoryEntry = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleString('ja-JP'),
+        assessment: result,
+        symptoms: { ...symptoms }
+      };
+      const updatedHistory = [newEntry, ...history];
+      setHistory(updatedHistory);
+      localStorage.setItem('attendance_history', JSON.stringify(updatedHistory));
+      
       setStep(3);
     } catch (error) {
       console.error(error);
       alert("判定中にエラーが発生しました。");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const clearHistory = () => {
+    if (confirm("全ての履歴を削除しますか？")) {
+      setHistory([]);
+      localStorage.removeItem('attendance_history');
     }
   };
 
@@ -135,12 +220,13 @@ const App: React.FC = () => {
     }
   };
 
-  const getResultIcon = (decision: DecisionResult) => {
+  const getResultIcon = (decision: DecisionResult, size: number = 16) => {
+    const className = `w-${size} h-${size}`;
     switch (decision) {
-      case DecisionResult.OFFICE: return <Building2 className="w-16 h-16" />;
-      case DecisionResult.REMOTE: return <Home className="w-16 h-16" />;
-      case DecisionResult.REST: return <AlertCircle className="w-16 h-16" />;
-      case DecisionResult.HOSPITAL: return <Stethoscope className="w-16 h-16" />;
+      case DecisionResult.OFFICE: return <Building2 className={className} />;
+      case DecisionResult.REMOTE: return <Home className={className} />;
+      case DecisionResult.REST: return <AlertCircle className={className} />;
+      case DecisionResult.HOSPITAL: return <Stethoscope className={className} />;
     }
   };
 
@@ -162,30 +248,118 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setStep(1)}>
             <div className="bg-indigo-600 p-2 rounded-lg text-white">
               <AlertCircle size={24} />
             </div>
             <h1 className="text-xl font-bold text-gray-800">出社判断サポーター</h1>
           </div>
-          <div className="text-sm font-medium text-gray-400">Step {step} / 3</div>
+          <button 
+            onClick={() => setStep(step === 4 ? 1 : 4)}
+            className={`p-2 rounded-lg transition-colors ${step === 4 ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100'}`}
+          >
+            <HistoryIcon size={24} />
+          </button>
         </div>
         <div className="w-full bg-gray-100 h-1">
           <div 
             className="bg-indigo-600 h-1 transition-all duration-300" 
-            style={{ width: `${(step / 3) * 100}%` }}
+            style={{ width: `${(Math.min(step, 3) / 3) * 100}%` }}
           />
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pt-8">
-        {step === 1 && (
+        {step === 4 ? (
+          /* History View */
+          <section className="space-y-6 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <HistoryIcon className="text-indigo-600" />
+                診断履歴・推移
+              </h2>
+              {history.length > 0 && (
+                <button onClick={clearHistory} className="text-rose-500 hover:text-rose-700 p-2">
+                  <Trash2 size={20} />
+                </button>
+              )}
+            </div>
+
+            {history.length > 0 ? (
+              <>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                  <h3 className="text-sm font-bold text-gray-500 mb-6 flex items-center gap-2 uppercase tracking-widest">
+                    <TrendingUp size={16} /> 不調スコア推移（直近7件）
+                  </h3>
+                  <SimpleLineChart data={history} />
+                </div>
+
+                <div className="space-y-4">
+                  {history.map((entry) => (
+                    <div key={entry.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                      <div className={`p-3 rounded-xl ${getResultColor(entry.assessment.decision)}`}>
+                        {getResultIcon(entry.assessment.decision, 6)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter">{entry.date}</span>
+                          <span className="text-xs font-black text-indigo-600">Score: {entry.assessment.score}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-gray-700 truncate">{getResultTitle(entry.assessment.decision)}</h4>
+                        <p className="text-[11px] text-gray-500 line-clamp-1 italic">{entry.assessment.reason}</p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setAssessment(entry.assessment);
+                          setSymptoms(entry.symptoms);
+                          setStep(3);
+                        }}
+                        className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                <HistoryIcon className="mx-auto text-gray-300 mb-4" size={48} />
+                <p className="text-gray-400 font-medium">履歴がありません</p>
+                <button onClick={() => setStep(1)} className="mt-4 text-indigo-600 font-bold text-sm">診断をはじめる</button>
+              </div>
+            )}
+          </section>
+        ) : step === 1 ? (
           <section className="space-y-6 animate-fadeIn">
             <div className="bg-blue-50 p-4 rounded-xl flex gap-3 border border-blue-100">
               <Info className="text-blue-500 shrink-0" />
               <p className="text-sm text-blue-700 leading-relaxed">
                 現在の症状を正直に入力してください。心と体の両面からチェックします。
               </p>
+            </div>
+
+            {/* Basic Info */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 border-b pb-2 mb-6">
+                <User className="text-indigo-500" size={20} /> 基本情報
+              </h2>
+              <label className="text-sm font-bold text-gray-700 mb-3 block">性別</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['male', 'female', 'other'] as Gender[]).map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setSymptoms({ ...symptoms, gender: g })}
+                    className={`py-3 px-4 rounded-xl border-2 transition-all font-bold text-sm ${
+                      symptoms.gender === g 
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md scale-[1.02]' 
+                        : 'bg-white border-gray-100 text-gray-400 hover:border-indigo-200'
+                    }`}
+                  >
+                    {g === 'male' ? '男性' : g === 'female' ? '女性' : 'その他'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Physical Symptoms */}
@@ -248,7 +422,7 @@ const App: React.FC = () => {
                         key={opt.value}
                         onClick={() => setSymptoms({ ...symptoms, [key as keyof Symptoms]: opt.value })}
                         className={`py-2 px-1 text-xs rounded-lg border transition-all ${
-                          symptoms[key as keyof Symptoms] === opt.value ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-200 text-gray-500'
+                          symptoms[key as keyof Symptoms] === opt.value ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500'
                         }`}
                       >
                         {opt.label}
@@ -299,7 +473,7 @@ const App: React.FC = () => {
                         key={opt.value}
                         onClick={() => setSymptoms({ ...symptoms, [key as keyof Symptoms]: opt.value })}
                         className={`py-2 px-1 text-xs rounded-lg border transition-all ${
-                          symptoms[key as keyof Symptoms] === opt.value ? 'bg-rose-500 border-rose-500 text-white' : 'bg-white border-gray-200 text-gray-500'
+                          symptoms[key as keyof Symptoms] === opt.value ? 'bg-rose-500 border-rose-500 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500'
                         }`}
                       >
                         {opt.label}
@@ -321,9 +495,7 @@ const App: React.FC = () => {
               </div>
             </div>
           </section>
-        )}
-
-        {step === 2 && (
+        ) : step === 2 ? (
           <section className="space-y-6 animate-fadeIn">
             <h2 className="text-lg font-bold text-gray-800">仕事の状況を確認</h2>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -352,13 +524,11 @@ const App: React.FC = () => {
               </div>
             </div>
           </section>
-        )}
-
-        {step === 3 && assessment && (
+        ) : step === 3 && assessment ? (
           <section className="space-y-6 animate-fadeIn">
             <div className={`p-8 rounded-3xl border-2 text-center shadow-lg transition-all ${getResultColor(assessment.decision)}`}>
               <div className="flex justify-center mb-4">
-                {getResultIcon(assessment.decision)}
+                {getResultIcon(assessment.decision, 16)}
               </div>
               <h2 className="text-2xl font-black mb-2">{getResultTitle(assessment.decision)}</h2>
               <div className="inline-block px-3 py-1 bg-white bg-opacity-50 rounded-full text-xs font-bold mb-4">
@@ -386,7 +556,7 @@ const App: React.FC = () => {
                 <button 
                   onClick={() => copyToClipboard(assessment.reportDraft)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    copied ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    copied ? 'bg-emerald-500 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -407,47 +577,67 @@ const App: React.FC = () => {
               免責事項: このツールは補助的なものであり、医学的・心理学的診断ではありません。
             </p>
           </section>
-        )}
+        ) : null}
       </main>
 
       {/* Footer Navigation */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white bg-opacity-80 backdrop-blur-md border-t flex justify-center">
+      <footer className="fixed bottom-0 left-0 right-0 p-4 bg-white bg-opacity-80 backdrop-blur-md border-t flex justify-center z-10">
         <div className="max-w-2xl w-full flex gap-3">
-          {step > 1 && step < 3 && (
+          {step === 4 ? (
             <button
-              onClick={() => setStep(step - 1)}
-              className="flex-1 py-4 px-6 bg-gray-100 text-gray-600 font-bold rounded-2xl flex items-center justify-center gap-2"
-            >
-              <ChevronLeft size={20} /> 戻る
-            </button>
-          )}
-          
-          {step === 1 && (
-             <button
-              onClick={() => setStep(2)}
+              onClick={() => setStep(1)}
               className="flex-1 py-4 px-6 bg-indigo-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg"
             >
-              次へ <ChevronRight size={20} />
+              診断に戻る
             </button>
-          )}
-
-          {step === 2 && (
-             <button
-              onClick={handleAssessment}
-              disabled={loading}
-              className={`flex-1 py-4 px-6 font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg ${
-                loading ? 'bg-gray-300' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-              }`}
-            >
-              {loading ? (
-                <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>AIが分析中...</span>
-                </div>
-              ) : (
-                <>判定する <ChevronRight size={20} /></>
+          ) : (
+            <>
+              {step > 1 && step < 3 && (
+                <button
+                  onClick={() => setStep(step - 1)}
+                  className="flex-1 py-4 px-6 bg-gray-100 text-gray-600 font-bold rounded-2xl flex items-center justify-center gap-2"
+                >
+                  <ChevronLeft size={20} /> 戻る
+                </button>
               )}
-            </button>
+              
+              {step === 1 && (
+                 <button
+                  onClick={() => setStep(2)}
+                  className="flex-1 py-4 px-6 bg-indigo-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg"
+                >
+                  次へ <ChevronRight size={20} />
+                </button>
+              )}
+
+              {step === 2 && (
+                 <button
+                  onClick={handleAssessment}
+                  disabled={loading}
+                  className={`flex-1 py-4 px-6 font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all ${
+                    loading ? 'bg-gray-300 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  {loading ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>AIが分析中...</span>
+                    </div>
+                  ) : (
+                    <>判定する <ChevronRight size={20} /></>
+                  )}
+                </button>
+              )}
+
+              {step === 3 && (
+                <button
+                  onClick={() => setStep(4)}
+                  className="flex-1 py-4 px-6 bg-indigo-50 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-2"
+                >
+                  履歴を見る <HistoryIcon size={20} />
+                </button>
+              )}
+            </>
           )}
         </div>
       </footer>

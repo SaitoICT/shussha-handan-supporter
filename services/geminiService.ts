@@ -8,6 +8,9 @@ export const getAIAssessment = async (symptoms: Symptoms, context: WorkContext):
   const prompt = `
     以下の体調（身体的・精神的）と仕事の状況に基づいて、出社・リモート・休養のいずれかを客観的に判断してください。
     
+    【基本情報】
+    - 性別: ${symptoms.gender === 'male' ? '男性' : symptoms.gender === 'female' ? '女性' : 'その他/未回答'}
+    
     【フィジカルデータ】
     - 体温: ${symptoms.fever}度
     - 咳: ${symptoms.cough}
@@ -28,13 +31,13 @@ export const getAIAssessment = async (symptoms: Symptoms, context: WorkContext):
     ---
     
     【判断の指針】
+    - 性別に応じた特有の体調の変化（ホルモンバランスや生理周期に伴う不調など）の可能性も考慮に入れ、特にメンタルや倦怠感については柔軟に判断してください。
     - 身体症状（発熱等）がなくても、メンタル症状が「重い(severe)」または「中程度(moderate)」が複数ある場合は、バーンアウト防止のため「REST」を優先的に検討してください。
-    - メンタル不調による休養の場合、報告文案は「体調不良」として一括りにしても良いし、信頼関係がある場合は「心身の調整」などの表現を使っても良いです。
 
     【出力項目】
-    1. decision & reason: なぜその判断に至ったか、身体と心の両面から論理的に説明。
-    2. aiAdvice: ユーザーの具体的な症状（例：不眠なら「デジタルデトックス」、ストレスなら「マインドフルネスや相談」）に合わせたケア方法。
-    3. reportDraft: 上長へそのまま送れる丁寧なビジネス敬語。業務調整の依頼も含む。
+    1. decision & reason: 判断の根拠を、性別による特性や身体・心の両面から論理的に説明。
+    2. aiAdvice: 具体的でパーソナライズされたケア方法。
+    3. reportDraft: 上長へそのまま送れる丁寧なビジネス敬語。
     4. score: 総合的な不調指数 (0-100)。
 
     出力は必ず以下のJSON形式で行ってください。
